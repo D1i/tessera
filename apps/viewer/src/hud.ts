@@ -70,7 +70,7 @@ export class Hud {
             <option value="27" selected>27 instances</option>
             <option value="64">64 instances</option>
           </select>
-          <label class="check"><input type="checkbox" data-k="ice" checked> a third translucent</label>
+          <label class="check" title="Alpha behind a depth pre-pass: right for a near-convex model like the asteroid, a concave model shows only its nearest shell"><input type="checkbox" data-k="ice" checked> a third translucent</label>
         </b></div>
         <div><span>Model</span><b data-k="model">${sourceLine(state)}</b></div>
         <div><span>Loaded</span><b data-k="loaded">0 / 0 archives · 0.0 MB</b></div>
@@ -154,6 +154,11 @@ export class Hud {
     this.v.modeText.textContent = mode === "lod" ? "on" : "off";
     this.v.modeSub.textContent = mode === "lod" ? "cluster LOD, per-instance cut" : "every instance draws all its triangles";
     (this.v.mode.parentElement as HTMLElement).classList.toggle("off", mode === "full");
+  }
+
+  /** Reflect the translucency setting set from code (off for loaded models). */
+  setTranslucent(on: boolean): void {
+    (this.v.ice as HTMLInputElement).checked = on;
   }
 
   /** Reflect a mode set from code (the A/B benchmark toggles it). */

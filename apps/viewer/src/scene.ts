@@ -92,7 +92,7 @@ export class Viewer {
   private _thresholdPx = 1;
   private _frustumCull = true;
   /** Selection budget per frame; instances past it wait for the next frame. */
-  selectBudgetMs = 4;
+  selectBudgetMs = 6;
   freezeCut = false;
   onFrame: ((f: FrameInfo) => void) | null = null;
 
@@ -119,9 +119,11 @@ export class Viewer {
     this.rock.specularColor = new Color3(0.08, 0.08, 0.08);
     this.rock.backFaceCulling = true;
 
-    // Translucent instances: alpha blending behind a depth pre-pass, so the
-    // surface reads as glass rather than a tangle of inner faces. Both passes
-    // scale with the triangle count, which is exactly what a benchmark wants.
+    // Translucent instances: alpha blending behind a depth pre-pass, so only the
+    // nearest surface blends and the surface reads as glass. Both passes scale
+    // with the triangle count, which is what a benchmark wants. This looks right
+    // for a near-convex model like the asteroid; a concave model shows its
+    // nearest shell only, so translucency is off by default for loaded models.
     this.ice = new StandardMaterial("ice", this.scene);
     this.ice.diffuseColor = new Color3(0.72, 0.86, 1.0);
     this.ice.specularColor = new Color3(0.6, 0.65, 0.7);

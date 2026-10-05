@@ -73,6 +73,8 @@ async function main(): Promise<void> {
     const m = await fetchManifest(base);
     const r = await makeRuntime(m);
     session = { runtime: r.runtime, manifest: m, wasmAvailable: r.wasmAvailable };
+    viewer.translucentEvery = 3;
+    hud.setTranslucent(true);
     viewer.setRuntime(session.runtime);
     hud.setModel(hudState("asteroid"));
     hud.packStatus("");
@@ -96,6 +98,9 @@ async function main(): Promise<void> {
 
       const r = await makeRuntime(packed.manifest);
       session = { runtime: r.runtime, manifest: packed.manifest, wasmAvailable: r.wasmAvailable };
+      // Translucency is tuned for the near-convex asteroid; an arbitrary model shows only its nearest shell.
+      viewer.translucentEvery = 0;
+      hud.setTranslucent(false);
       viewer.setRuntime(session.runtime);
       hud.setModel(hudState(file.name));
       const total = packed.archives.reduce((s, a) => s + a.byteLength, 0);
@@ -112,27 +117,37 @@ async function main(): Promise<void> {
     }
   }
 
-  // Drag and drop anywhere.
+  // Drag and drop anywhere. Only file drags count: a dragged text selection or
+  // a slider thumb must not bring the overlay up.
+  const isFileDrag = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
   let dragDepth = 0;
+  const endDrag = () => {
+    dragDepth = 0;
+    document.body.classList.remove("dropping");
+  };
   window.addEventListener("dragenter", (e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     dragDepth++;
     document.body.classList.add("dropping");
   });
-  window.addEventListener("dragleave", () => {
-    if (--dragDepth <= 0) {
-      dragDepth = 0;
-      document.body.classList.remove("dropping");
-    }
+  window.addEventListener("dragleave", (e) => {
+    if (!isFileDrag(e)) return;
+    if (--dragDepth <= 0) endDrag();
   });
-  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("dragover", (e) => {
+    if (isFileDrag(e)) e.preventDefault();
+  });
   window.addEventListener("drop", (e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
-    dragDepth = 0;
-    document.body.classList.remove("dropping");
+    endDrag();
     const f = e.dataTransfer?.files?.[0];
     if (f) void loadUserModel(f);
   });
+  // A drag that ends outside the window never sends dragleave; clear the overlay on the next pointer move.
+  window.addEventListener("dragend", endDrag);
+  window.addEventListener("pointermove", () => { if (dragDepth > 0) endDrag(); }, { passive: true });
 
   const progress = await streamArchives(base, session.runtime, loaderEvents, (f, c) => viewer.uploadRange(f, c));
   hud.progress(progress);

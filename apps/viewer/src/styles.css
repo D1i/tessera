@@ -42,17 +42,17 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .scene-row select { font: inherit; font-size: 12px; background: #161b24; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; color-scheme: dark; }
 .scene-row select option { background: #161b24; color: var(--text); }
 .scene-row .check { font-weight: 400; }
-.hud-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+.hud-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; user-select: none; }
 .stat { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .stat b { display: block; font-family: var(--mono); font-size: 20px; font-weight: 500; color: var(--text); }
 .stat span { color: var(--muted); font-size: 11px; }
-.hud-rows { display: grid; gap: 4px; margin-bottom: 8px; }
+.hud-rows { display: grid; gap: 4px; margin-bottom: 8px; user-select: none; }
 .hud-rows > div { display: grid; grid-template-columns: 78px 1fr; gap: 8px; }
 .hud-rows span { color: var(--muted); }
 .hud-rows b { font-weight: 500; font-family: var(--mono); font-size: 11.5px; }
 .hud-progress { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 12px; }
 .hud-progress div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width 0.15s; }
-.hud-controls { display: grid; gap: 7px; border-top: 1px solid var(--border); padding-top: 10px; }
+.hud-controls { display: grid; gap: 7px; border-top: 1px solid var(--border); padding-top: 10px; user-select: none; }
 .range span { display: flex; justify-content: space-between; margin-bottom: 2px; }
 .range b { font-family: var(--mono); font-weight: 500; }
 .range input { width: 100%; accent-color: var(--accent); }
@@ -70,7 +70,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .hud-status:empty { display: none; }
 .hud-status.busy { color: var(--warn); }
 body.dropping::after { content: "drop to load"; position: fixed; inset: 0; display: grid; place-items: center; background: rgba(97, 114, 243, 0.18); border: 2px dashed var(--accent); font-family: var(--mono); color: var(--text); pointer-events: none; }
-.bench-out { font-family: var(--mono); font-size: 11px; color: var(--text); white-space: pre-wrap; margin: 0; min-height: 0; }
+.bench-out { font-family: var(--mono); font-size: 11px; color: var(--text); white-space: pre-wrap; margin: 0; min-height: 0; user-select: text; }
 .bench-out:empty { display: none; }
 .hud-help { color: var(--muted); font-size: 11px; margin-top: 10px; }
 
