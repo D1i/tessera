@@ -12,7 +12,7 @@
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; color-scheme: dark; }
 #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
 
 .hud {
@@ -38,7 +38,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .switch-text b { font-weight: 600; font-size: 13.5px; }
 .switch-text small { color: var(--muted); font-size: 11px; }
 .scene-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--sans) !important; font-size: 12px !important; }
-.scene-row select { font: inherit; font-size: 12px; background: rgba(255, 255, 255, 0.04); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+/* color-scheme makes the native dropdown list dark too; the option colours are the fallback for browsers that ignore it. */
+.scene-row select { font: inherit; font-size: 12px; background: #161b24; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; color-scheme: dark; }
+.scene-row select option { background: #161b24; color: var(--text); }
 .scene-row .check { font-weight: 400; }
 .hud-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
 .stat { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
