@@ -126,13 +126,20 @@ apps/viewer/src/pack     in-browser packer (TypeScript port of tessera-pack on m
 
 ## Known limits and next steps
 
-Nanite's efficiency is not reproducible in a browser today, and this project does not claim it. What ports is the data structure: the cluster hierarchy, the error metric, the seamless cut and coarse-to-fine streaming, which is where the 120× on the benchmark scene comes from. What does not port yet is the GPU side. Nanite selects and culls clusters in compute with persistent threads and issues its own draws; WebGL has no compute, and WebGPU has no multi-draw indirect in core and subgroup operations only as an optional feature. Nanite rasterizes micro-triangles in compute into a visibility buffer with 64-bit atomics; WebGPU has no 64-bit atomics. Nanite streams the pages its culling pass asked for; Tessera downloads the whole hierarchy. Concretely:
+Nanite's efficiency is not reproducible in a browser today, and this project does not claim it. What ports is the data structure: the cluster hierarchy, the error metric, the seamless cut and coarse-to-fine streaming, which is where the 120× on the benchmark scene comes from. What does not port yet is the GPU side. Nanite selects and culls clusters in compute with persistent threads and issues its own draws; WebGL has no compute, and while WebGPU can drive the whole cut from a compute pass ([nanite-webgpu](https://github.com/Scthe/nanite-webgpu) does), it has no multi-draw indirect in core and subgroups only as an optional feature, so Tessera keeps selection on the CPU to serve WebGL2 and a streamed hierarchy with one runtime. Nanite rasterizes micro-triangles in compute into a visibility buffer with 64-bit atomics; WebGPU has no 64-bit atomics, and packing depth into 32 bits costs precision. Nanite streams the pages its culling pass asked for; Tessera downloads the whole hierarchy. Concretely:
 
 - Selection runs on the CPU (amortised over instances with a per-frame budget); a WebGPU compute path would move selection and culling to the GPU and feed one indirect draw per instance.
 - Clusters are culled against the frustum only; back-face cone culling and occlusion against a depth pyramid from the previous frame are the next step.
 - Cluster blobs are stored as-is (quantization alone gives 3.3×); a meshoptimizer vertex/index codec on top would roughly halve the download.
 - Textures are not part of the format yet (KTX2 with per-cluster UVs is the plan).
 - Translucent instances are sorted per mesh, not per triangle; the asteroid is close enough to convex that this holds up, a concave translucent model would not.
+
+## Related work
+
+- [nanite-webgpu](https://github.com/Scthe/nanite-webgpu) by Scthe (2024, MIT; see also the author's [write-up](https://www.sctheblog.com/blog/nanite-report/)) is the closest prior work: a WebGPU-only Nanite-style renderer with GPU-driven per-meshlet culling, occlusion culling against the previous frame's depth pyramid and a compute software rasterizer that packs depth and normal into 32-bit atomics; the meshlet DAG is built with meshoptimizer and METIS. The whole hierarchy sits in static GPU buffers; there is no streaming. Tessera takes the other side of the trade: a streamed on-disk format with proxy-first loading, CPU selection in Rust/WebAssembly, WebGL2 as well as WebGPU, and a simpler neighbour grouping without METIS.
+- Brian Karis, *A Deep Dive into Nanite Virtualized Geometry*, SIGGRAPH 2021 Advances in Real-Time Rendering: the cluster DAG, the error metric and the two-pass occlusion culling this project is inspired by.
+- Paolo Cignoni, Fabio Ganovelli, Enrico Gobbetti, Fabio Marton, Federico Ponchio, Roberto Scopigno, *Batched Multi Triangulation*, IEEE Visualization 2005: the multiresolution structure both projects' hierarchies descend from.
+- [meshoptimizer](https://github.com/zeux/meshoptimizer) by Arseny Kapoulkine: meshlet building and border-locked simplification, used here natively in the packer and as WebAssembly in the browser.
 
 ## License
 
