@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tessera — streaming cluster LOD in the browser</title>
+    <meta name="description" content="Streaming cluster LOD for the browser, inspired by Nanite: a Rust/WebAssembly runtime streams a 1.5M-triangle model as cluster LODs into Babylon.js. 27 instances, 40M source triangles, a switch that turns the technique off." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Tessera" />
+    <meta property="og:title" content="Tessera — streaming cluster LOD in the browser" />
+    <meta property="og:description" content="Inspired by Nanite: 27 instances of a 1.5M-triangle model, 40M source triangles, 337k drawn per frame. Rust → WebAssembly runtime, Babylon.js viewer, a switch that turns the technique off." />
+    <meta property="og:url" content="https://d1i.github.io/tessera/" />
+    <meta property="og:image" content="https://d1i.github.io/tessera/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A field of 27 asteroids, a third of them translucent, rendered with streaming cluster LOD" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101828'/%3E%3Cpath d='M16 5 27 11v10l-11 6-11-6V11z' fill='none' stroke='%238098f9' stroke-width='2'/%3E%3Cpath d='M16 5v22M5 11l11 6 11-6' fill='none' stroke='%238098f9' stroke-width='2'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <aside id="hud" class="hud"></aside>
+    <div id="splash" class="splash">loading proxy…</div>
+    <a class="corner" href="https://github.com/D1i/tessera" target="_blank" rel="noopener">source on GitHub</a>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

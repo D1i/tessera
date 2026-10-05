@@ -1,0 +1,8 @@
+node_modules/
+target/
+dist/
+crates/tessera-runtime/pkg/
+apps/viewer/public/wasm/
+apps/viewer/public/asset/
+*.log
+.DS_Store

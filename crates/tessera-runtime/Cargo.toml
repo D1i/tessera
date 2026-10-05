@@ -1,0 +1,17 @@
+[package]
+name = "tessera-runtime"
+description = "Streaming LOD runtime: decodes cluster archives into a vertex pool and selects the cluster cut per frame. Compiles to WebAssembly."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tessera-format = { path = "../tessera-format" }
+wasm-bindgen = "0.2"
+
+[dev-dependencies]
+tessera-pack = { path = "../../tools/tessera-pack" }

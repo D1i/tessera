@@ -1,0 +1,57 @@
+name: build and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install wasm-pack
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+      - run: npm ci
+      - run: cargo test --release
+      - run: npm run build:wasm
+      - run: npm run asset
+      - run: npm run typecheck
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/viewer/dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Needs Pages enabled once in Settings → Pages → Source: GitHub Actions.
+      - uses: actions/configure-pages@v6
+        continue-on-error: true
+        with:
+          enablement: true
+      - id: deployment
+        uses: actions/deploy-pages@v5

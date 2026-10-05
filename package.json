@@ -1,0 +1,27 @@
+{
+  "name": "tessera",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Streaming cluster-LOD (virtualized geometry) for the browser: Rust/WebAssembly runtime, Babylon.js viewer, offline packer.",
+  "license": "MIT",
+  "author": "Maxim Kalin",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "asset": "cargo run --release -p tessera-pack -- --out apps/viewer/public/asset --tris 1500000",
+    "build:wasm": "wasm-pack build crates/tessera-runtime --target web --release --out-dir pkg --no-typescript --no-pack && node scripts/copy-wasm.mjs",
+    "dev": "npm run dev -w apps/viewer",
+    "build": "npm run build -w apps/viewer",
+    "preview": "npm run preview -w apps/viewer",
+    "typecheck": "tsc -p apps/viewer --noEmit",
+    "test": "cargo test --release",
+    "bench": "cargo run --release -p tessera-runtime --example bench"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

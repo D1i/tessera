@@ -1,0 +1,18 @@
+[package]
+name = "tessera-pack"
+description = "Offline packer: builds the cluster LOD hierarchy (meshlets, grouped simplification) and packs it into streamable archives."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "tessera-pack"
+path = "src/main.rs"
+
+[dependencies]
+tessera-format = { path = "../../crates/tessera-format" }
+meshopt = "0.6"
