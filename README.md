@@ -1,139 +1,138 @@
-# infinity-grid-canvas
+# Tessera
 
-Infinite drag-and-drop layout grid on Canvas 2D: a dynamic coordinate grid with placement prediction, collision resolution by pushing neighbours, resize anchors, undo/redo, pan and zoom, and virtualized rendering that stays at 60 fps with 50 000 items on the sheet.
+Streaming cluster LOD for the browser, inspired by Unreal's Nanite. A *tessera* is one tile of a mosaic; here every tile is a cluster of up to 128 triangles, and the mosaic re-tiles itself as the camera moves. A 1.5-million-triangle model is cut into 35,000 clusters arranged in a 13-level hierarchy, streamed as six archives, and rendered by Babylon.js from a cut that a Rust/WebAssembly runtime re-selects every frame. The first frame shows up after the first 0.5 MB; the rest refines in place.
 
-**Live demo:** https://d1i.github.io/infinity-grid-canvas/
+**Live demo:** https://d1i.github.io/tessera/
 
-![Dragging a field onto an occupied row: the prediction (dashed) shows where it lands and which neighbour is pushed right](docs/drag-prediction.png)
+![27 instances of the 1.5M-triangle asteroid, a third of them translucent: 40 million source triangles, 337k in the cut](docs/viewer-field.png)
 
-## What is in the box
+The demo opens on the benchmark scene: 27 instances of the model (40.5 million source triangles, a third of them translucent) and a switch that turns Tessera off, so the same scene, camera and draw calls can be compared against drawing the full geometry.
 
-| Package | What it does | Runtime deps |
-|---|---|---|
-| `packages/core` | Grid model, placement prediction, resize, history, viewport, Canvas 2D renderer, pointer/keyboard controller | none |
-| `packages/flow` | Flowchart canvas used by the demo's "no-code scheme" view: layered DAG generator, orthogonal edges with labels, node shapes, pan/zoom | none |
-| `apps/demo` | React 18 + Vite shell: palette, inspector, benchmark HUD, theme switch | react, react-dom |
-| `bench` | Playwright runner with DevTools CPU throttling; writes `bench/results/latest.md` | playwright |
+## What it does
 
-The core is plain TypeScript with no framework dependency, so it can sit under React, Vue, or a vanilla page. React is only used for the chrome around the canvas.
+- **Cluster hierarchy, not discrete LODs.** The mesh is split into meshlets (≤128 triangles). Neighbouring clusters are grouped by eight, each group is simplified to half its triangles with the group border locked, and the result is re-clustered. Repeat until one cluster is left. Groups overlap differently on every level, so no seam survives from one level to the next and the cut never shows cracks.
+- **Per-cluster error metric.** Every cluster carries the error of the simplification that produced it and the error of the coarser cluster that will replace it. The runtime projects both to screen pixels and renders a cluster exactly when its own error is under the threshold and its replacement's is over. Errors are monotonic up the hierarchy and parent bounds enclose child bounds, so the decision is made independently per cluster and still yields one consistent cut.
+- **Streaming with a proxy first.** Archives are ordered coarse to fine. The first one (0.5 MB of a 26 MB model) holds the top eight levels, which is enough for a complete picture. All six are fetched in parallel over HTTP/2 and decoded in order; clusters whose finer children have not arrived yet simply stay in the cut.
+- **One vertex pool, one draw call.** Vertex buffers for the whole model are allocated once from the manifest and filled range by range as archives decode. The cut is a list of index ranges copied into one index buffer, so the whole model is a single draw call regardless of how many clusters are visible.
+- **Rust → WebAssembly runtime** for decoding (quantized positions, octahedral normals, 8-bit local indices) and for the per-frame selection, with a TypeScript port of the same algorithm kept as the reference implementation and as the benchmark baseline. The viewer runs on whichever is available and shows which one it is.
+- **Instances share the pool.** Every instance of the model is a mesh over the same vertex buffers with an index buffer of its own; the runtime selects each instance's cut for the camera in that instance's object space (uniform scale cancels out of the error projection). Selection is amortised over frames with a per-frame budget, and a still camera selects nothing.
 
-## Engine
+## Benchmark: Tessera on vs off
 
-**Row-indexed model.** Items live in a `Map<id, item>` plus a `Map<row, item[]>`. Every operation that matters during a drag (hit tests, free-space checks, prediction) touches a single row, so cost does not depend on how many items the sheet holds.
+The switch at the top of the panel turns the technique off. Off means what a renderer without cluster LOD does: every instance draws the full-resolution geometry from one shared index buffer, no selection, no culling, same meshes, same materials, same draw calls. The default scene is deliberately heavy: 27 instances × 1,498,176 triangles = 40,450,752 source triangles, with a third of the instances translucent (alpha blending behind a depth pre-pass, so both passes scale with the triangle count). At the opening view the cut is 337k triangles, 120× fewer than the full geometry; the scene can be set to 1, 9, 27 or 64 instances (64 is 96 million source triangles).
 
-**Placement prediction.** While dragging, `grid.predict(x, y, w)` returns where the item would land and which neighbours would move:
+**Run A/B benchmark** measures the current camera in both modes, 2.5 s each after every instance's cut is current, and prints the GPU, the frame rate, the milliseconds per frame, the triangles per frame and the cost of re-selecting every instance's cut:
 
-- the cell under the pointer is free: valid, no shifts;
-- it overlaps: items to the right are pushed in a cascade, each one only as far as needed;
-- the cascade runs past the last column: the prediction is marked invalid and nothing moves.
-
-The renderer draws the prediction (dashed outline, pushed neighbours tinted) on every pointer move; `grid.commit(prediction, item)` applies it as one undoable step.
-
-**Resize anchors.** Left and right edges of a hovered item are anchors; dragging one resizes the item with the opposite edge pinned and the same prediction overlay, which turns red when the new width would overlap a neighbour.
-
-**Infinite rows.** The sheet grows as items are placed below the last row and keeps a few empty rows as a tail. Nothing is pre-allocated.
-
-**Batch allocator.** `grid.addMany(n, spec)` packs `n` items into free rows in one pass (50 000 items in about 70 ms) and records a single undo entry.
-
-**History.** Command stack with batching, capped at 200 entries; `Ctrl+Z` / `Ctrl+Y`.
-
-**Virtualized rendering.** The renderer only visits rows that intersect the viewport, so the frame cost depends on the screen, not on the item count. Level of detail follows the zoom: full titles above 50 %, glyph badges only between 30 % and 50 %, tinted tiles below that, which turns a 50 000-field sheet into a readable occupancy map at 20 %.
-
-**Viewport.** Zoom 20 %–400 % around the pointer (`Ctrl` + wheel, `+` / `-` / `0`, double-click on empty space), pan by dragging empty space or with the wheel, edge auto-pan while dragging, reset view with `0`.
-
-**Input.** Pointer-based drag from the palette (window-level listeners, no HTML5 DnD), drag threshold, keyboard nudging with arrows, `Del` to remove, `Esc` to cancel a drag.
-
-![Zoomed-out overview of 10 000 fields in the dark theme](docs/overview-10k-dark.png)
-
-## No-code scheme view
-
-Every field has a gear. It opens a flowchart canvas with an automation attached to that field. The view is **visual only**: "Generate scheme" builds a plausible layered graph (trigger, conditions with yes/no branches, data and notification steps, end states) with a seeded PRNG, lays it out, and draws orthogonal edges with arrowheads and label pills over a dotted background. Nodes can be dragged (snapped to an 8 px grid), the canvas pans and zooms. "Save" shows a warning that this is a demo and nothing is persisted.
-
-![Generated no-code scheme](docs/flow-editor.png)
-
-## Benchmark
-
-Numbers from `npm run bench` on a 2-vCPU Linux VM (Intel Xeon 2.10 GHz), headless Chromium 141, 1440×900 viewport. Frame times are p50 / p95 of 200 synchronous renders; "drawn" is how many items intersected the viewport; "drag" is the `requestAnimationFrame` rate while an item is dragged across the sheet with prediction running on every pointer move.
-
-**No throttling**
-
-| fields | add | undo | frame @100 % | frame @20 % | drag |
-|---:|---:|---:|---|---|---:|
-| 1 000 | 4 ms | 1 ms | 0.3 / 0.7 ms (41 drawn) | 0.3 / 0.5 ms (193 drawn) | 60 fps |
-| 10 000 | 11 ms | 4 ms | 0.3 / 0.6 ms (42 drawn) | 0.3 / 0.6 ms (194 drawn) | 60 fps |
-| 50 000 | 72 ms | 21 ms | 0.3 / 0.6 ms (42 drawn) | 0.4 / 0.6 ms (194 drawn) | 60 fps |
-
-**10x CPU throttling** (DevTools `Emulation.setCPUThrottlingRate`)
-
-| fields | add | undo | frame @100 % | frame @20 % | drag |
-|---:|---:|---:|---|---|---:|
-| 1 000 | 24 ms | 1 ms | 4.0 / 8.7 ms | 3.4 / 6.0 ms | 41 fps |
-| 10 000 | 139 ms | 12 ms | 3.8 / 6.9 ms | 3.5 / 7.2 ms | 40 fps |
-| 50 000 | 620 ms | 219 ms | 4.3 / 8.1 ms | 4.1 / 6.8 ms | 46 fps |
-
-Frame time is flat across sheet sizes because only visible rows are rendered. Under 10x throttling a frame still fits in a 16 ms budget; the drag rate there is bounded by the test driver's pointer-event cadence as much as by rendering. Full table with the 40 % column and redo timings: [`bench/results/latest.md`](bench/results/latest.md).
-
-```sh
-npm run build
-npm run bench                       # unthrottled + 10x
-npm run bench -- --throttle 4       # other rate
-npm run bench -- --sizes 1000,100000 --frames 500
+```
+ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 ...)
+1920×1080 · 27 × 1,498,176 = 40,450,752 source triangles · wasm runtime
+Tessera on    …  fps ·   … ms/frame ·     337,464 tris/frame · cut for 27 instances in … ms
+Tessera off   …  fps ·   … ms/frame ·  40,450,752 tris/frame
+→ …× the frame rate with 120× fewer triangles
 ```
 
-The runner starts Vite's preview server in-process, drives the demo through `window.__infinityGrid` (grid, controller, `addMany`, `clear`) and `controller.renderOnce()`, and writes `bench/results/latest.md` and `latest.json`. Playwright needs a browser once: `npx playwright install chromium`.
+The numbers depend on the GPU, so the demo prints them rather than this README claiming them. The off figure is bounded by raw triangle throughput (and by fill for the translucent instances); the on figure by the pixels on screen.
 
-## Getting started
+![Cluster colours: each tile is one meshlet; zooming in splits them, zooming out merges them](docs/viewer-clusters.png)
+
+## Bring your own model
+
+Drop an `.obj`, `.stl`, `.glb` or `.gltf` onto the page (or use **Load your model…** in the panel). The same hierarchy builder runs in the browser, in a worker, on meshoptimizer's WebAssembly build: weld → meshlets → groups → simplify → re-cluster → quantize → archives. The result is byte-compatible with what `tessera-pack` writes, so it goes through the identical runtime path, and the panel reports build time, levels, cluster count and packed size. A 200k-triangle OBJ builds in about 1.5 s, a 1M-triangle STL in about 10 s (2-vCPU VM; faster on a desktop). **Asteroid** brings the bundled model back.
+
+### What is meshoptimizer's and what is this project's
+
+[meshoptimizer](https://github.com/zeux/meshoptimizer) supplies two primitives, used only at pack time: splitting an index buffer into meshlets and quadric simplification with locked vertices (the `meshopt` crate natively, the npm WebAssembly build in the browser). Everything around them is this repository: grouping, the error/bounds bookkeeping that makes the hierarchy consistent, the container format, the streaming order, the per-frame cut selection, and the single-draw-call rendering. Babylon.js only draws the one mesh it is given; it does no LOD of its own here.
+
+![Near view of the procedural asteroid, 267k triangles in the cut](docs/viewer-near.png)
+
+## Numbers
+
+Procedural asteroid, 1,498,176 source triangles, packed on a 2-vCPU Linux VM:
+
+| | |
+|---|---|
+| Hierarchy | 35,804 clusters, 13 levels, built in 3.6 s |
+| Packed size | 26.5 MB in 6 archives (quantized: 8 bytes per vertex, 3 per triangle); the same geometry as float32 would be 88 MB |
+| First archive | 555 KB, 797 clusters, levels 5–12 |
+| Decode (native Rust) | 310 MB/s, 2.17 M vertices in 86 ms |
+| Cut selection (native Rust) | 0.14 ms for a 14k-triangle cut, 0.56 ms for a 342k-triangle cut |
+| In the browser (TypeScript runtime, headless Chromium, localhost) | first frame 0.22–0.36 s, full detail 1.7–2.6 s, decode 400–470 ms, selection 2–3.5 ms/frame |
+
+At a 1 px threshold on a 1080p viewport the cut follows the screen footprint rather than the model: 25k triangles when the asteroid covers a tenth of the screen, 140k at a quarter, 380k when the camera is close enough that the surface fills it. With 27 instances the opening view is 337k triangles for 40.5 million of source geometry; a close-up of one instance is about 300k, the instances behind the camera are frustum-culled by the runtime.
+
+Run `npm run bench` for the native numbers on your machine, and the **Benchmark** button in the viewer for the WebAssembly vs TypeScript comparison in your browser.
+
+## How it works
+
+```
+tools/tessera-pack (Rust, native)           crates/tessera-runtime (Rust → WebAssembly)
+  procedural mesh / OBJ                       manifest → preallocated vertex pool
+  weld → meshlets (meshoptimizer)             archive → decode clusters into the pool
+  group ×8 → simplify ½, border locked        every frame: project errors, pick the cut,
+  re-cluster, repeat → hierarchy              write its index ranges into one buffer
+  quantize → model.tsm + archive-*.tsa      apps/viewer (TypeScript + Babylon.js)
+                                              fetch archives in parallel, apply in order
+                                              upload pool ranges, draw the cut, HUD
+```
+
+**Selection rule**, per loaded cluster `c`, with `proj(e, sphere) = e · viewportHeight / (2 · tan(fov/2) · (distance − radius))`:
+
+```
+render c  ⇔  proj(c.parentError, c.parentSphere) > T
+          ∧ (c is a leaf  ∨  proj(c.lodError, c.lodSphere) ≤ T  ∨  children of c not loaded)
+          ∧  c.lodSphere intersects the frustum
+```
+
+`T` is the error threshold in pixels (1 px by default, slider in the HUD). All clusters produced from one group share `lodError`/`lodSphere`; all clusters belonging to that group share them as `parentError`/`parentSphere`, which is what makes the independent decisions agree.
+
+**Format.** `model.tsm` (magic `TSM1`) is a 128-byte header (bounds, totals, archive table). Each `archive-<i>.tsa` (`TSA1`) starts with 40-byte records for its clusters (level, counts, children range, two quantized spheres, two errors) followed by the cluster blobs: `u8 vertexCount, u8 triangleCount, vertexCount × {u16 x, y, z, u8 nx, ny}, triangleCount × 3 × u8`. Everything a frame needs about a cluster arrives with the cluster, so the runtime never knows about geometry it has not loaded.
+
+![Far view with cluster colours: the cut is 39k triangles at level 7](docs/viewer-clusters-far.png)
+
+## Using the runtime from your own engine
+
+The runtime knows nothing about Babylon.js. It takes the manifest, the archives and a camera, and gives back a pool range to upload after each archive and an index list to draw after each selection. An engine has to provide three things: vertex buffers sized from `manifest.totalVertices` and filled by range (positions and normals as float32 × 3, colours as u8 × 4), an index buffer sized for the largest cut it allows and rewritten when the cut changes, with the draw count set to the cut length, and no frustum culling of its own, since the runtime culls per cluster. For several instances, give each its own index buffer and select with the camera transformed into that instance's object space; uniform scale cancels out of the error projection.
+
+- **three.js**: one `BufferGeometry` with `DynamicDrawUsage` attributes. After each archive, `attribute.addUpdateRange(first * 3, count * 3)` and `needsUpdate = true` on positions and normals; copy the cut into the index attribute, `addUpdateRange` + `needsUpdate`, then `geometry.setDrawRange(0, cut.length)`; `mesh.frustumCulled = false`. If an attribute's array is a view into WebAssembly memory, re-point it after every archive, because growing the memory detaches old views. With `WEBGL_multi_draw` (what `BatchedMesh` is built on) the cut can be submitted as offset/count lists and the index copy disappears.
+- **Babylon.js** (what `apps/viewer/src/scene.ts` does): a shared `Buffer` per attribute with `createVertexBuffer` views per mesh, `Buffer.updateDirectly` for the range, `engine.updateDynamicIndexBuffer` for the cut, `subMesh.indexCount` for the draw count.
+
+## Running it
 
 ```sh
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # apps/demo/dist
-npm run typecheck
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack          # or: npm i -g wasm-pack
+
+npm run asset                    # packs the asteroid into apps/viewer/public/asset (~10 s)
+npm run build:wasm               # wasm-pack → apps/viewer/public/wasm
+npm run dev                      # http://localhost:5173
+
+npm test                         # Rust tests: format round-trips, hierarchy invariants, cut consistency
+npm run bench                    # native decode / selection benchmark
 ```
 
-Node 20.19+ or 22.12+ (Vite 7).
-
-## Using the core without the demo
-
-```ts
-import { Grid, GridController, lightTheme } from "@infinity-grid-canvas/core";
-
-const grid = new Grid({ columns: 12, rowHeight: 44, minRows: 14 });
-const controller = new GridController(canvas, grid, {
-  select: (item) => console.log("selected", item),
-  gear: (item) => console.log("gear", item),
-  change: () => console.log("layout changed"),
-  view: (zoom) => console.log("zoom", zoom)
-}, lightTheme);
-
-grid.add({ id: "name", type: "text", title: "Full name", x: 0, y: 0, w: 6, required: true });
-
-// Drag something in from outside the canvas (e.g. a palette button):
-button.addEventListener("pointerdown", (e) =>
-  controller.beginExternalDrag({ type: "money", title: "Amount", w: 3 }, e)
-);
-```
-
-`grid.toJSON()` / `grid.load(snapshot)` serialize the layout. `controller.stats` exposes fps, last frame time and the number of items drawn.
+Without `build:wasm` the viewer runs the TypeScript runtime and says so in the HUD. Other inputs: `cargo run --release -p tessera-pack -- --out <dir> --shape terrain --tris 3000000`, or `--obj model.obj` for your own mesh.
 
 ## Project layout
 
 ```
-packages/core/src
-  model.ts        item/prediction types, defaults, width helpers
-  grid.ts         row-indexed model, predict/commit, resize, addMany, history
-  viewport.ts     zoom/pan math, visible-row range, constraints
-  renderer.ts     Canvas 2D drawing, level of detail, hit-test cache
-  controller.ts   pointer/keyboard state machine, render loop, stats
-  glyphs.ts       field-type icons drawn with canvas paths
-  theme.ts        light/dark tokens
-packages/flow/src
-  model.ts        node kinds and sizes
-  generator.ts    seeded layered DAG generator + layout
-  flow-canvas.ts  flowchart renderer and interaction
-apps/demo/src     React shell (App, FlowEditor, inspector, palette, styles)
-bench/run.mjs     Playwright benchmark
+crates/tessera-format    container format: quantization, cluster blob codec, manifest/archive tables
+crates/tessera-runtime   vertex pool, archive decoding, frustum + error-driven cut selection, wasm-bindgen API
+tools/tessera-pack       procedural generators, meshlet building, grouped simplification, packing
+apps/viewer              Babylon.js viewer: streaming loader, GPU buffers, HUD, benchmark
+apps/viewer/src/pack     in-browser packer (TypeScript port of tessera-pack on meshoptimizer's wasm), OBJ/STL/glTF import
+.github/workflows        tests, wasm build, asset generation, Pages deploy
 ```
+
+## Known limits and next steps
+
+Nanite's efficiency is not reproducible in a browser today, and this project does not claim it. What ports is the data structure: the cluster hierarchy, the error metric, the seamless cut and coarse-to-fine streaming, which is where the 120× on the benchmark scene comes from. What does not port yet is the GPU side. Nanite selects and culls clusters in compute with persistent threads and issues its own draws; WebGL has no compute, and WebGPU has no multi-draw indirect in core and subgroup operations only as an optional feature. Nanite rasterizes micro-triangles in compute into a visibility buffer with 64-bit atomics; WebGPU has no 64-bit atomics. Nanite streams the pages its culling pass asked for; Tessera downloads the whole hierarchy. Concretely:
+
+- Selection runs on the CPU (amortised over instances with a per-frame budget); a WebGPU compute path would move selection and culling to the GPU and feed one indirect draw per instance.
+- Clusters are culled against the frustum only; back-face cone culling and occlusion against a depth pyramid from the previous frame are the next step.
+- Cluster blobs are stored as-is (quantization alone gives 3.3×); a meshoptimizer vertex/index codec on top would roughly halve the download.
+- Textures are not part of the format yet (KTX2 with per-cluster UVs is the plan).
+- Translucent instances are sorted per mesh, not per triangle; the asteroid is close enough to convex that this holds up, a concave translucent model would not.
 
 ## License
 
